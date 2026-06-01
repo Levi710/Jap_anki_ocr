@@ -26,17 +26,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.command == "profile":
-        pdf_path = Path(args.pdf_path)
-        if not pdf_path.exists():
-            parser.error(f"PDF does not exist: {pdf_path}")
+    pdf_path = Path(args.pdf_path)
+    if not pdf_path.exists():
+        print(f"PDF does not exist: {pdf_path}", file=sys.stderr)
+        return 2
 
-        run_dir = create_profiling_run(pdf_path=pdf_path, runs_root=Path(args.runs_dir))
-        print(f"Profiling run created: {run_dir}")
-        return 0
-
-    parser.error(f"Unsupported command: {args.command}")
-    return 2
+    run_dir = create_profiling_run(pdf_path=pdf_path, runs_root=Path(args.runs_dir))
+    print(f"Profiling run created: {run_dir}")
+    return 0
 
 
 if __name__ == "__main__":

@@ -56,6 +56,8 @@ class ProfilingTests(unittest.TestCase):
             self.assertTrue(runs_dir.exists())
             self.assertEqual(len(list(runs_dir.iterdir())), 1)
             print_mock.assert_called_once()
+            printed_message = print_mock.call_args.args[0]
+            self.assertIn("Profiling run created:", printed_message)
 
 
 if __name__ == "__main__":
