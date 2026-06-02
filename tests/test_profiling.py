@@ -38,9 +38,27 @@ class ProfilingTests(unittest.TestCase):
             self.assertTrue(profile_json.exists())
 
             profile_data = json.loads(profile_json.read_text(encoding="utf-8"))
+            self.assertEqual(profile_data["phase"], "2.0")
             self.assertEqual(profile_data["command"], "profile")
             self.assertEqual(profile_data["source_pdf"], str(pdf_path.resolve()))
             self.assertEqual(profile_data["stubs"]["ocr"], "not_implemented")
+            outputs = profile_data["outputs"]
+            expected_outputs = [
+                "sampled_pages",
+                "page_features",
+                "layout_clusters",
+                "section_taxonomy",
+                "structure_candidates",
+                "structure_models",
+                "profile_report",
+                "profile_A",
+                "profile_B",
+                "profile_C",
+                "database",
+            ]
+            for key in expected_outputs:
+                self.assertIn(key, outputs)
+                self.assertTrue((run_dir / outputs[key]).exists(), msg=f"Missing {outputs[key]}")
 
     def test_cli_profile_command_creates_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -58,6 +76,19 @@ class ProfilingTests(unittest.TestCase):
             print_mock.assert_called_once()
             printed_message = print_mock.call_args.args[0]
             self.assertIn("Profiling run created:", printed_message)
+
+    def test_structure_candidates_include_required_types(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            pdf_path = tmp_path / "book.pdf"
+            pdf_path.write_bytes(b"%PDF-1.4\n")
+
+            run_dir = create_profiling_run(pdf_path=pdf_path, runs_root=tmp_path / "runs")
+            candidates_path = run_dir / "structure_candidates.json"
+            self.assertTrue(candidates_path.exists())
+            candidates = json.loads(candidates_path.read_text(encoding="utf-8"))
+            candidate_types = {candidate["candidate_type"] for candidate in candidates["candidates"]}
+            self.assertEqual(candidate_types, {"table_like", "list_like", "repeated_rows"})
 
 
 if __name__ == "__main__":

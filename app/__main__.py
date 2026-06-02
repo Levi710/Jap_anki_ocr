@@ -11,7 +11,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    profile_parser = subparsers.add_parser("profile", help="Create a Phase 1.5 profiling run")
+    profile_parser = subparsers.add_parser("profile", help="Create a Phase 2 profiling run")
     profile_parser.add_argument("pdf_path", help="Path to input PDF")
     profile_parser.add_argument(
         "--runs-dir",

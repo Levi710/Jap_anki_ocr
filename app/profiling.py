@@ -7,7 +7,20 @@ from pathlib import Path
 import re
 from uuid import uuid4
 
-PHASE_VERSION = "1.5"
+from .pdf_utils import PDFInspector
+from .stages import (
+    LayoutClusteringStage,
+    PageFeatureExtractionStage,
+    ProfilingRunContext,
+    ProfilingSamplingStage,
+    RuleSynthesisAndRankingStage,
+    SectionDiscoveryStage,
+    StageRunner,
+    StructureModelDiscoveryStage,
+)
+from .storage import RunDatabase
+
+PHASE_VERSION = "2.0"
 PDF_HEADER_SEARCH_BYTES = 1024
 
 
@@ -53,12 +66,69 @@ def create_profiling_run(pdf_path: Path, runs_root: Path = Path("runs")) -> Path
             "This may indicate a concurrent run directory collision."
         ) from exc
 
+    database = RunDatabase(run_dir / "profile.db")
+    pdf_inspector = PDFInspector(pdf_path)
+    context = ProfilingRunContext(
+        run_dir=run_dir,
+        pdf_path=pdf_path,
+        fingerprint=fingerprint,
+        created_at=created_at,
+        database=database,
+        pdf_inspector=pdf_inspector,
+    )
+    runner = StageRunner(context)
+    try:
+        sampling_result = runner.run_stage(ProfilingSamplingStage(), {})
+        feature_result = runner.run_stage(
+            PageFeatureExtractionStage(),
+            {"sampled_pages": sampling_result.outputs["sampled_pages"]},
+        )
+        clustering_result = runner.run_stage(
+            LayoutClusteringStage(),
+            {"page_features": feature_result.outputs["page_features"]},
+        )
+        section_result = runner.run_stage(
+            SectionDiscoveryStage(),
+            {"clusters": clustering_result.outputs["clusters"]},
+        )
+        structure_result = runner.run_stage(
+            StructureModelDiscoveryStage(),
+            {"page_features": feature_result.outputs["page_features"]},
+        )
+        ranking_result = runner.run_stage(
+            RuleSynthesisAndRankingStage(),
+            {
+                "clusters": clustering_result.outputs["clusters"],
+                "section_taxonomy": section_result.outputs["section_taxonomy"],
+                "structure_models": structure_result.outputs["structure_models"],
+            },
+        )
+    finally:
+        database.close()
+
     profile_data = {
         "phase": PHASE_VERSION,
         "command": "profile",
         "created_at_utc": created_at.isoformat(),
         "source_pdf": str(pdf_path.resolve()),
         "fingerprint": fingerprint,
+        "outputs": {
+            "sampled_pages": "sampled_pages.json",
+            "page_features": "page_features.json",
+            "layout_clusters": "clusters.json",
+            "section_taxonomy": "section_taxonomy.json",
+            "structure_candidates": "structure_candidates.json",
+            "structure_models": "structure_models.json",
+            "profile_report": "profile_report.md",
+            "profile_A": "profile_A.json",
+            "profile_B": "profile_B.json",
+            "profile_C": "profile_C.json",
+            "database": "profile.db",
+        },
+        "profiles": {
+            "recommended": ranking_result.outputs["recommended_profile"],
+            "ranked": [profile.name for profile in ranking_result.outputs["profiles"]],
+        },
         "stubs": {
             "ocr": "not_implemented",
             "extraction": "not_implemented",
